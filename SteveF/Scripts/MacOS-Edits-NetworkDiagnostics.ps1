@@ -1,3 +1,4 @@
+#!/usr/bin/env pwsh
 # ===============================
 # Network Diagnostics Script
 # ===============================
@@ -35,8 +36,13 @@ function Run-PingTest {
         Write-LogEntry -Message "--- Ping Cycle $i of $RepeatCycles ---" -LogPath $LogPath -Color "Cyan"
 
         $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = "ping.exe"
-        $psi.Arguments = "$Target -n $PingCount"
+        if ($IsWindows) {
+            $psi.FileName = "ping"
+            $psi.Arguments = "$Target -n $PingCount"
+        } else {
+            $psi.FileName = "ping"
+            $psi.Arguments = "-c $PingCount $Target"
+        }
         $psi.RedirectStandardOutput = $true
         $psi.UseShellExecute = $false
         $psi.CreateNoWindow = $true
@@ -48,12 +54,12 @@ function Run-PingTest {
         while (-not $proc.StandardOutput.EndOfStream) {
             $line = $proc.StandardOutput.ReadLine()
 
-            if ($line -match "time[=<](\d+)ms") {
-                $latency = [int]$matches[1]
+            if ($line -match "time[=<]?(\d+\.?\d*) ?ms") {
+                $latency = [double]$matches[1]
                 $allPings += $latency
                 $successCount++
                 $color = if ($latency -gt 200) { "Yellow" } else { "Green" }
-            } elseif ($line -match "Request timed out") {
+            } elseif ($line -match "timed out|timeout|100% packet loss") {
                 $color = "Red"
             } else {
                 $color = "Gray"
@@ -111,7 +117,11 @@ function Run-Traceroute {
     Add-Content -Path $LogPath -Value "--- Traceroute ---"
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = "tracert.exe"
+    if ($IsWindows) {
+        $psi.FileName = "tracert"
+    } else {
+        $psi.FileName = "traceroute"
+    }
     $psi.Arguments = $Target
     $psi.RedirectStandardOutput = $true
     $psi.UseShellExecute = $false
@@ -124,8 +134,8 @@ function Run-Traceroute {
     while (-not $proc.StandardOutput.EndOfStream) {
         $line = $proc.StandardOutput.ReadLine()
 
-        if ($line -match "(\d+)\s*ms") {
-            $latency = [int]$matches[1]
+        if ($line -match "(\d+\.?\d*)\s*ms") {
+            $latency = [double]$matches[1]
             $color = if ($latency -gt 200) { "Yellow" } else { "Cyan" }
         } elseif ($line -match "\*") {
             $color = "Red"
@@ -151,8 +161,16 @@ function Run-BufferbloatTest {
     Write-LogEntry -Message "--- Bufferbloat Test ---" -LogPath $LogPath -Color "Cyan"
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = "ping.exe"
-    $psi.Arguments = "$Target -f -l $PacketSize -n 4"
+    if ($IsWindows) {
+        $psi.FileName = "ping"
+        $psi.Arguments = "$Target -f -l $PacketSize -n 4"
+    } elseif ($IsMacOS) {
+        $psi.FileName = "ping"
+        $psi.Arguments = "-D -s $PacketSize -c 4 $Target"
+    } else {
+        $psi.FileName = "ping"
+        $psi.Arguments = "-M do -s $PacketSize -c 4 $Target"
+    }
     $psi.RedirectStandardOutput = $true
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
@@ -163,10 +181,10 @@ function Run-BufferbloatTest {
 
     while (-not $proc.StandardOutput.EndOfStream) {
         $line = $proc.StandardOutput.ReadLine()
-        if ($line -match "Packet needs to be fragmented") {
+        if ($line -match "Packet needs to be fragmented|Frag needed|Message too long") {
             $fragmentDetected = $true
             $color = "Yellow"
-        } elseif ($line -match "Request timed out") {
+        } elseif ($line -match "timed out|timeout|100% packet loss") {
             $color = "Red"
         } else {
             $color = "Green"
@@ -241,8 +259,8 @@ function Run-Diagnostics {
 # ===============================
 # Main Menu
 # ===============================
-$logDir = "C:\Scripts\Logs"
-if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
+$logDir = Join-Path $HOME "Scripts/Logs"
+if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
 
 $defaultRepeatCycles = 3
 
