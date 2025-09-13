@@ -1,0 +1,5 @@
+14:40:04 --- Bufferbloat Test ---
+14:40:04 Testing with packet size: 1500 bytes
+ping: -f flag: Operation not permitted
+14:40:04 Normal ping response at 1500 bytes. No bufferbloat.
+14:40:04 Bufferbloat test completed.
