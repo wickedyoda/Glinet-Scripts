@@ -1,1 +1,0 @@
-MTU discovered for 8.8.8.8: 1380 bytes
